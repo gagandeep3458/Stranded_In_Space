@@ -1,0 +1,52 @@
+#include "/Engine/Public/Platform.ush"
+
+struct FSimBodiesData
+{
+	float2 Positions[20];
+	float Masses[20];
+	int NumActive;
+};
+
+RWTexture2D<float4> RenderTarget : register(u0);
+StructuredBuffer<FSimBodiesData> SimBodiesData : register(t0);
+Texture2D<float4> GridTexture : register(t1);
+SamplerState InputSampler : register(s0); 
+
+[numthreads(THREADS_X, THREADS_Y, THREADS_Z)]
+void S_GravityGrid(
+	uint3 DispatchThreadId : SV_DispatchThreadID,
+	uint GroupIndex : SV_GroupIndex )
+{
+	uint Width, Height;
+	RenderTarget.GetDimensions(Width, Height);
+	
+	float2 UV = float2(
+	(float)DispatchThreadId.x / (float)(Width - 1),
+	(float)DispatchThreadId.y / (float)(Height - 1));
+
+	float2 DistortedUV = UV;
+
+	for (uint i = 0; i < SimBodiesData[0].NumActive; i++)
+	{
+		float2 Center = SimBodiesData[0].Positions[i];
+
+		float Mass = SimBodiesData[0].Masses[i];
+	
+		float2 ToCenter = UV - Center;
+	
+		float Dist = length(ToCenter);
+
+		float Strength = Mass / 1000; 
+	
+		float Falloff = 35.0; 
+
+		float Distortion = Strength * exp(-Dist * Falloff);
+	
+		float2 Direction = -normalize(ToCenter);
+
+		DistortedUV -= Direction * Distortion * Dist;
+	}
+	
+	RenderTarget[DispatchThreadId.xy] = GridTexture.SampleLevel(InputSampler, DistortedUV,0);
+	
+}
